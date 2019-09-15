@@ -631,16 +631,12 @@ public:
     auto [it, inserted] = db->uid2lid_and_path.try_emplace(fid);
     if (inserted) {
       const FileEntry *fe = sm.getFileEntryForID(fid);
-      if (!fe)
+      if (!fe) {
+        it->second.first = -1;
         return -1;
+      }
       it->second.first = db->uid2lid_and_path.size() - 1;
-      SmallString<256> path = fe->tryGetRealPathName();
-      if (path.empty())
-        path = fe->getName();
-      if (!llvm::sys::path::is_absolute(path) &&
-          !sm.getFileManager().makeAbsolutePath(path))
-        return -1;
-      it->second.second = llvm::sys::path::convert_to_slash(path.str());
+      it->second.second = pathFromFileEntry(*fe);
     }
     return it->second.first;
   }
@@ -1371,7 +1367,8 @@ index(SemaManager *manager, WorkingFiles *wfiles, VFS *vfs,
     entry->import_file = main;
     entry->args = args;
     for (auto &[_, it] : entry->uid2lid_and_path)
-      entry->lid2path.emplace_back(it.first, std::move(it.second));
+      if (it.first >= 0)
+        entry->lid2path.emplace_back(it.first, std::move(it.second));
     entry->uid2lid_and_path.clear();
     for (auto &it : entry->usr2func) {
       // e.g. declaration + out-of-line definition
